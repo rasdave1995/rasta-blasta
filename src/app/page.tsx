@@ -1,5 +1,13 @@
 'use client'
 
+// Add global window type extensions
+declare global {
+  interface Window {
+    currentAudio: HTMLAudioElement | null
+    cleanupMusic: (() => void) | null
+  }
+}
+
 import { useState, useEffect, useRef } from 'react'
 import { Button } from '@/components/ui/button'
 
@@ -94,13 +102,15 @@ export default function RetroArcadeGame() {
     if (!audioContextRef.current) {
       try {
         audioContextRef.current = new (window.AudioContext || (window as any).webkitAudioContext)()
+        console.log('🔊 Audio context created')
       } catch (error) {
         console.error('Failed to create audio context:', error)
+        return null
       }
     }
     
     // Resume audio context if it's suspended (required for mobile)
-    if (audioContextRef.current && audioContextRef.current.state === 'suspended') {
+    if (audioContextRef.current.state === 'suspended') {
       audioContextRef.current.resume().then(() => {
         setAudioUnlocked(true)
         console.log('🔓 Audio context unlocked')
@@ -430,8 +440,17 @@ export default function RetroArcadeGame() {
   const playMusicDirect = () => {
     console.log('🎵 Direct music play initiated by user')
     
+    // First, try to unlock audio context
+    initAudioContext()
+    
     try {
-      // Create fresh audio element on user click
+      // Clean up any existing audio
+      if (window.currentAudio) {
+        window.currentAudio.pause()
+        window.currentAudio = null
+      }
+      
+      // Method 1: Direct audio element creation
       const audio = new Audio('/root-of-evil.mp3')
       audio.loop = true
       audio.volume = 0.3
@@ -445,11 +464,58 @@ export default function RetroArcadeGame() {
       if (playPromise !== undefined) {
         playPromise.then(() => {
           console.log('✅ SUCCESS: Music playing directly!')
-          // Hide the audio unlock button since music is working
           setAudioUnlocked(true)
         }).catch(error => {
           console.error('❌ Direct play failed:', error)
-          alert('Audio playback failed. Please try again or check your device settings.')
+          
+          // Method 2: Try with a different approach
+          setTimeout(() => {
+            try {
+              const audio2 = new Audio('/root-of-evil.mp3')
+              audio2.loop = true
+              audio2.volume = 0.3
+              
+              const playPromise2 = audio2.play()
+              
+              if (playPromise2 !== undefined) {
+                playPromise2.then(() => {
+                  console.log('✅ SUCCESS: Music playing with delayed approach!')
+                  setAudioUnlocked(true)
+                  window.currentAudio = audio2
+                }).catch(error2 => {
+                  console.error('❌ Delayed approach also failed:', error2)
+                  
+                  // Method 3: Try with user interaction context
+                  setTimeout(() => {
+                    try {
+                      const audio3 = new Audio('/root-of-evil.mp3')
+                      audio3.loop = true
+                      audio3.volume = 0.3
+                      
+                      const playPromise3 = audio3.play()
+                      
+                      if (playPromise3 !== undefined) {
+                        playPromise3.then(() => {
+                          console.log('✅ SUCCESS: Music playing with double-delayed approach!')
+                          setAudioUnlocked(true)
+                          window.currentAudio = audio3
+                        }).catch(error3 => {
+                          console.error('❌ All methods failed:', error3)
+                          alert('Audio playback failed. Please try again or check your device settings.')
+                        })
+                      }
+                    } catch (error3) {
+                      console.error('❌ Final approach failed:', error3)
+                      alert('Could not load audio file. Please check if the file exists.')
+                    }
+                  }, 100)
+                })
+              }
+            } catch (error2) {
+              console.error('❌ Second approach failed:', error2)
+              alert('Could not load audio file. Please check if the file exists.')
+            }
+          }, 50)
         })
       }
     } catch (error) {
@@ -1160,15 +1226,15 @@ export default function RetroArcadeGame() {
       <div className="mt-2 md:mt-4">
         {/* Mobile Audio Unlock Button */}
         {!audioUnlocked && (
-          <div className="mb-2 md:mb-4">
+          <div className="mb-2 md:mb-4 animate-pulse">
             <Button 
               onClick={playMusicDirect}
-              className="bg-orange-500 hover:bg-orange-600 text-white px-4 md:px-6 py-2 md:py-3 font-mono text-sm md:text-lg flex items-center gap-2 w-full md:w-auto"
+              className="bg-orange-500 hover:bg-orange-600 text-white px-4 md:px-6 py-3 md:py-4 font-mono text-base md:text-xl flex items-center gap-2 w-full md:w-auto shadow-lg"
             >
               🔊 Tap to Enable Sound & Music
             </Button>
-            <p className="text-orange-400 text-center font-mono text-xs md:text-sm mt-1">
-              Mobile users: Tap here first to enable audio
+            <p className="text-orange-400 text-center font-mono text-sm md:text-base mt-2 font-bold">
+              MOBILE USERS: TAP THIS BUTTON FIRST!
             </p>
           </div>
         )}
@@ -1182,6 +1248,13 @@ export default function RetroArcadeGame() {
         <p className="text-yellow-400 text-center font-mono text-xs md:text-sm mt-1 md:mt-2">
           Click this button to start the background music
         </p>
+        
+        {/* Debug Info */}
+        <div className="mt-2 text-xs text-gray-400 text-center">
+          Audio Status: {audioUnlocked ? '✅ Unlocked' : '🔒 Locked'} | 
+          Context: {audioContextRef.current ? '✅ Created' : '❌ Not Created'} |
+          Current Audio: {window.currentAudio ? '✅ Playing' : '❌ Not Playing'}
+        </div>
       </div>
     </div>
   )
