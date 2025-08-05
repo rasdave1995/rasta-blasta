@@ -226,6 +226,14 @@ export default function RetroArcadeGame() {
     setTouchControls(prev => ({ ...prev, [control]: false }))
   }
   
+  // Global touch handler for audio unlock
+  const handleGlobalTouch = () => {
+    if (!audioUnlocked) {
+      console.log('🎵 Global touch - attempting to unlock audio')
+      playMusicDirect()
+    }
+  }
+  
   // Prevent scrolling when touching game controls
   useEffect(() => {
     const preventScroll = (e: TouchEvent) => {
@@ -436,91 +444,61 @@ export default function RetroArcadeGame() {
     }
   }
   
-  // Direct audio play - ONLY called from user interaction
+  // Direct audio play - simplified for mobile
   const playMusicDirect = () => {
-    console.log('🎵 Direct music play initiated by user')
-    
-    // First, try to unlock audio context
-    initAudioContext()
+    console.log('🎵 Starting music playback...')
     
     try {
-      // Clean up any existing audio
-      if (window.currentAudio) {
-        window.currentAudio.pause()
-        window.currentAudio = null
+      // Use existing audio element if available
+      let audio = window.currentAudio
+      
+      // If no existing audio, create new one
+      if (!audio) {
+        audio = new Audio('/root-of-evil.mp3')
+        audio.loop = true
+        audio.volume = 0.5
+        window.currentAudio = audio
       }
       
-      // Method 1: Direct audio element creation
-      const audio = new Audio('/root-of-evil.mp3')
-      audio.loop = true
-      audio.volume = 0.3
-      
-      // Store reference
-      window.currentAudio = audio
-      
-      // Play immediately - this should work because it's directly from user click
+      // Try to play
       const playPromise = audio.play()
       
       if (playPromise !== undefined) {
         playPromise.then(() => {
-          console.log('✅ SUCCESS: Music playing directly!')
+          console.log('✅ Music playing!')
           setAudioUnlocked(true)
         }).catch(error => {
-          console.error('❌ Direct play failed:', error)
+          console.error('❌ Play failed:', error)
           
-          // Method 2: Try with a different approach
-          setTimeout(() => {
-            try {
-              const audio2 = new Audio('/root-of-evil.mp3')
-              audio2.loop = true
-              audio2.volume = 0.3
-              
-              const playPromise2 = audio2.play()
-              
-              if (playPromise2 !== undefined) {
-                playPromise2.then(() => {
-                  console.log('✅ SUCCESS: Music playing with delayed approach!')
-                  setAudioUnlocked(true)
-                  window.currentAudio = audio2
-                }).catch(error2 => {
-                  console.error('❌ Delayed approach also failed:', error2)
-                  
-                  // Method 3: Try with user interaction context
-                  setTimeout(() => {
-                    try {
-                      const audio3 = new Audio('/root-of-evil.mp3')
-                      audio3.loop = true
-                      audio3.volume = 0.3
-                      
-                      const playPromise3 = audio3.play()
-                      
-                      if (playPromise3 !== undefined) {
-                        playPromise3.then(() => {
-                          console.log('✅ SUCCESS: Music playing with double-delayed approach!')
-                          setAudioUnlocked(true)
-                          window.currentAudio = audio3
-                        }).catch(error3 => {
-                          console.error('❌ All methods failed:', error3)
-                          alert('Audio playback failed. Please try again or check your device settings.')
-                        })
-                      }
-                    } catch (error3) {
-                      console.error('❌ Final approach failed:', error3)
-                      alert('Could not load audio file. Please check if the file exists.')
-                    }
-                  }, 100)
-                })
-              }
-            } catch (error2) {
-              console.error('❌ Second approach failed:', error2)
-              alert('Could not load audio file. Please check if the file exists.')
-            }
-          }, 50)
+          // Try silent approach
+          audio.muted = true
+          audio.play().then(() => {
+            console.log('✅ Music playing (silent start)')
+            setTimeout(() => {
+              audio.muted = false
+              console.log('✅ Music unmuted')
+            }, 100)
+            setAudioUnlocked(true)
+          }).catch(error2 => {
+            console.error('❌ Silent approach failed:', error2)
+            // Try one more time with a new audio element
+            setTimeout(() => {
+              const audio3 = new Audio('/root-of-evil.mp3')
+              audio3.loop = true
+              audio3.volume = 0.5
+              audio3.play().then(() => {
+                console.log('✅ Music playing with delayed approach!')
+                window.currentAudio = audio3
+                setAudioUnlocked(true)
+              }).catch(error3 => {
+                console.error('❌ All approaches failed:', error3)
+              })
+            }, 200)
+          })
         })
       }
     } catch (error) {
-      console.error('❌ Failed to create audio element:', error)
-      alert('Could not load audio file. Please check if the file exists.')
+      console.error('❌ Audio creation failed:', error)
     }
   }
   
@@ -1042,7 +1020,23 @@ export default function RetroArcadeGame() {
   }, [gameState, currentTaunt, player, bank, soundwaves, bankProjectiles])
 
   return (
-    <div className="flex flex-col items-center justify-center min-h-screen bg-black p-2 md:p-4">
+    <div 
+      className="flex flex-col items-center justify-center min-h-screen bg-black p-2 md:p-4"
+      onTouchStart={handleGlobalTouch}
+    >
+      {/* Hidden audio element for mobile */}
+      <audio 
+        ref={(el) => {
+          if (el && !window.currentAudio) {
+            window.currentAudio = el
+          }
+        }}
+        src="/root-of-evil.mp3" 
+        loop 
+        preload="auto"
+        style={{ display: 'none' }}
+      />
+      
       <style jsx>{`
         /* Prevent zoom on double tap */
         * {
@@ -1224,20 +1218,18 @@ export default function RetroArcadeGame() {
       
       {/* Music Button at Bottom */}
       <div className="mt-2 md:mt-4">
-        {/* Mobile Audio Unlock Button */}
-        {!audioUnlocked && (
-          <div className="mb-2 md:mb-4 animate-pulse">
-            <Button 
-              onClick={playMusicDirect}
-              className="bg-orange-500 hover:bg-orange-600 text-white px-4 md:px-6 py-3 md:py-4 font-mono text-base md:text-xl flex items-center gap-2 w-full md:w-auto shadow-lg"
-            >
-              🔊 Tap to Enable Sound & Music
-            </Button>
-            <p className="text-orange-400 text-center font-mono text-sm md:text-base mt-2 font-bold">
-              MOBILE USERS: TAP THIS BUTTON FIRST!
-            </p>
-          </div>
-        )}
+        {/* Mobile Audio Unlock Button - Always show for mobile */}
+        <div className="mb-2 md:mb-4">
+          <Button 
+            onClick={playMusicDirect}
+            className="bg-orange-500 hover:bg-orange-600 text-white px-6 py-4 font-mono text-lg flex items-center gap-2 w-full shadow-lg animate-pulse"
+          >
+            🔊 TAP HERE TO PLAY MUSIC
+          </Button>
+          <p className="text-orange-400 text-center font-mono text-sm mt-2 font-bold">
+            MOBILE USERS: TAP THIS BUTTON FIRST!
+          </p>
+        </div>
         
         <Button 
           onClick={playMusicDirect}
@@ -1248,13 +1240,6 @@ export default function RetroArcadeGame() {
         <p className="text-yellow-400 text-center font-mono text-xs md:text-sm mt-1 md:mt-2">
           Click this button to start the background music
         </p>
-        
-        {/* Debug Info */}
-        <div className="mt-2 text-xs text-gray-400 text-center">
-          Audio Status: {audioUnlocked ? '✅ Unlocked' : '🔒 Locked'} | 
-          Context: {audioContextRef.current ? '✅ Created' : '❌ Not Created'} |
-          Current Audio: {window.currentAudio ? '✅ Playing' : '❌ Not Playing'}
-        </div>
       </div>
     </div>
   )
