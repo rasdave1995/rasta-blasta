@@ -100,10 +100,18 @@ export default function RetroArcadeGame() {
     return audioContextRef.current
   }
   
+  // Touch controls state
+  const [touchControls, setTouchControls] = useState({
+    left: false,
+    right: false,
+    shoot: false
+  })
+  
   // Refs for keyboard input to avoid dependency issues
   const gameStateRef = useRef(gameState)
   const playerInitialsRef = useRef(playerInitials)
   const keysRef = useRef(keys)
+  const touchControlsRef = useRef(touchControls)
   const playerRef = useRef(player)
   const bankRef = useRef(bank)
   const soundwavesRef = useRef(soundwaves)
@@ -121,6 +129,10 @@ export default function RetroArcadeGame() {
   useEffect(() => {
     keysRef.current = keys
   }, [keys])
+  
+  useEffect(() => {
+    touchControlsRef.current = touchControls
+  }, [touchControls])
   
   useEffect(() => {
     playerRef.current = player
@@ -146,6 +158,58 @@ export default function RetroArcadeGame() {
   const BANK_MOVE_SPEED = 1 // Bank horizontal movement speed
   const CANVAS_WIDTH = 800
   const CANVAS_HEIGHT = 600
+  
+  // Responsive canvas dimensions
+  const [canvasSize, setCanvasSize] = useState({ width: CANVAS_WIDTH, height: CANVAS_HEIGHT })
+  
+  // Update canvas size based on screen size
+  useEffect(() => {
+    const updateCanvasSize = () => {
+      const isMobile = window.innerWidth < 768
+      if (isMobile) {
+        const maxWidth = Math.min(window.innerWidth - 32, CANVAS_WIDTH) // 32px for padding
+        const scale = maxWidth / CANVAS_WIDTH
+        setCanvasSize({
+          width: maxWidth,
+          height: CANVAS_HEIGHT * scale
+        })
+      } else {
+        setCanvasSize({ width: CANVAS_WIDTH, height: CANVAS_HEIGHT })
+      }
+    }
+    
+    updateCanvasSize()
+    window.addEventListener('resize', updateCanvasSize)
+    
+    return () => window.removeEventListener('resize', updateCanvasSize)
+  }, [])
+  
+  // Touch control handlers
+  const handleTouchStart = (control: 'left' | 'right' | 'shoot') => {
+    setTouchControls(prev => ({ ...prev, [control]: true }))
+    if (control === 'shoot' && gameStateRef.current.isPlaying) {
+      playSound('shoot')
+    }
+  }
+  
+  const handleTouchEnd = (control: 'left' | 'right' | 'shoot') => {
+    setTouchControls(prev => ({ ...prev, [control]: false }))
+  }
+  
+  // Prevent scrolling when touching game controls
+  useEffect(() => {
+    const preventScroll = (e: TouchEvent) => {
+      if (gameState.isPlaying) {
+        e.preventDefault()
+      }
+    }
+    
+    document.addEventListener('touchmove', preventScroll, { passive: false })
+    
+    return () => {
+      document.removeEventListener('touchmove', preventScroll)
+    }
+  }, [gameState.isPlaying])
 
   // Sound effects
   const playSound = (type: 'shoot' | 'hit' | 'explosion' | 'gameOver') => {
@@ -523,11 +587,14 @@ export default function RetroArcadeGame() {
     if (!gameState.isPlaying) return
 
     const gameLoop = setInterval(() => {
-      // Update player position
+      // Update player position (support both keyboard and touch controls)
       setPlayer(prev => {
         let newX = prev.x
-        if (keysRef.current.left && newX > 0) newX -= PLAYER_SPEED
-        if (keysRef.current.right && newX < CANVAS_WIDTH - prev.width) newX += PLAYER_SPEED
+        const keys = keysRef.current
+        const touch = touchControlsRef.current
+        
+        if ((keys.left || touch.left) && newX > 0) newX -= PLAYER_SPEED
+        if ((keys.right || touch.right) && newX < CANVAS_WIDTH - prev.width) newX += PLAYER_SPEED
         return { ...prev, x: newX }
       })
 
@@ -548,8 +615,8 @@ export default function RetroArcadeGame() {
         return { ...prev, x: newX, direction: newDirection }
       })
 
-      // Shoot soundwaves
-      if (keysRef.current.space) {
+      // Shoot soundwaves (support both keyboard and touch controls)
+      if (keysRef.current.space || touchControlsRef.current.shoot) {
         setSoundwaves(prev => {
           const lastWave = prev[prev.length - 1]
           // Limit shooting rate
@@ -906,17 +973,44 @@ export default function RetroArcadeGame() {
   }, [gameState, currentTaunt, player, bank, soundwaves, bankProjectiles])
 
   return (
-    <div className="flex flex-col items-center justify-center min-h-screen bg-black p-4">
-      <div className="mb-4">
-        <h1 className="text-6xl font-bold mb-2 text-center font-mono">
+    <div className="flex flex-col items-center justify-center min-h-screen bg-black p-2 md:p-4">
+      <style jsx>{`
+        /* Prevent zoom on double tap */
+        * {
+          touch-action: manipulation;
+        }
+        
+        /* Improve touch button feedback */
+        .touch-button {
+          -webkit-tap-highlight-color: transparent;
+          user-select: none;
+          -webkit-user-select: none;
+          -moz-user-select: none;
+          -ms-user-select: none;
+        }
+        
+        /* Prevent text selection on touch devices */
+        .no-select {
+          -webkit-touch-callout: none;
+          -webkit-user-select: none;
+          -moz-user-select: none;
+          -ms-user-select: none;
+          user-select: none;
+        }
+      `}</style>
+      <div className="mb-2 md:mb-4 text-center">
+        <h1 className="text-4xl md:text-6xl font-bold mb-1 md:mb-2 font-mono">
           <span className="text-green-400">RASTA</span>
           <span className="text-yellow-400">BLASTA</span>
         </h1>
-        <p className="text-red-400 text-center font-mono">
+        <p className="text-red-400 text-center font-mono text-sm md:text-base">
           Destroy the babylon system with reggae sound waves!
         </p>
-        <p className="text-yellow-400 text-center font-mono text-sm mt-2">
+        <p className="text-yellow-400 text-center font-mono text-xs md:text-sm mt-1 md:mt-2">
           Controls: ← → Arrow Keys to Move | Spacebar to Shoot | H for High Scores
+        </p>
+        <p className="text-green-400 text-center font-mono text-xs mt-1 md:hidden">
+          Mobile: Use touch buttons below when playing
         </p>
       </div>
       
@@ -924,29 +1018,29 @@ export default function RetroArcadeGame() {
       {!gameState.isPlaying && (
         <>
           {/* Start Game Button - moved outside canvas */}
-          <div className="mb-4">
+          <div className="mb-2 md:mb-4">
             <Button 
               onClick={initGame}
-              className="bg-green-500 hover:bg-green-600 text-black font-bold text-xl px-8 py-4 font-mono"
+              className="bg-green-500 hover:bg-green-600 text-black font-bold text-lg md:text-xl px-6 md:px-8 py-3 md:py-4 font-mono w-full md:w-auto"
             >
               {gameState.gameOver ? 'PLAY AGAIN' : 'START GAME'}
             </Button>
           </div>
           
           {/* Cover Image */}
-          <div className="mb-4">
+          <div className="mb-2 md:mb-4">
             <img 
               src="https://i.imgur.com/VCBfSkj.jpeg" 
               alt="RASTA BLASTA Game Poster" 
-              className="max-w-md rounded-lg border-4 border-yellow-400"
+              className="max-w-xs md:max-w-md rounded-lg border-4 border-yellow-400 w-full"
             />
           </div>
           
           {/* High Scores Button - moved below image */}
-          <div className="mb-4">
+          <div className="mb-2 md:mb-4">
             <Button 
               onClick={showHighScores}
-              className="bg-yellow-500 hover:bg-yellow-600 text-black font-bold text-xl px-8 py-4 font-mono"
+              className="bg-yellow-500 hover:bg-yellow-600 text-black font-bold text-lg md:text-xl px-6 md:px-8 py-3 md:py-4 font-mono w-full md:w-auto"
             >
               HIGH SCORES
             </Button>
@@ -959,6 +1053,12 @@ export default function RetroArcadeGame() {
           ref={canvasRef}
           width={CANVAS_WIDTH}
           height={CANVAS_HEIGHT}
+          style={{ 
+            width: `${canvasSize.width}px`, 
+            height: `${canvasSize.height}px`,
+            maxWidth: '100%',
+            height: 'auto'
+          }}
           className="border-4 border-green-400 bg-black cursor-pointer"
           onClick={() => {
             if (!gameState.isPlaying) {
@@ -994,15 +1094,74 @@ export default function RetroArcadeGame() {
         )}
       </div>
       
+      {/* Touch Controls - only visible on mobile when game is playing */}
+      {gameState.isPlaying && (
+        <div className="mt-2 md:mt-4 flex flex-col items-center gap-3 md:hidden">
+          <div className="flex gap-3">
+            {/* Left Button */}
+            <button
+              onTouchStart={() => handleTouchStart('left')}
+              onTouchEnd={() => handleTouchEnd('left')}
+              onMouseDown={() => handleTouchStart('left')}
+              onMouseUp={() => handleTouchEnd('left')}
+              onMouseLeave={() => handleTouchEnd('left')}
+              className={`touch-button no-select w-16 h-16 md:w-20 md:h-20 rounded-full border-4 ${
+                touchControls.left 
+                  ? 'bg-green-500 border-green-300' 
+                  : 'bg-gray-800 border-green-400'
+              } flex items-center justify-center text-white font-bold text-xl md:text-2xl`}
+            >
+              ←
+            </button>
+            
+            {/* Right Button */}
+            <button
+              onTouchStart={() => handleTouchStart('right')}
+              onTouchEnd={() => handleTouchEnd('right')}
+              onMouseDown={() => handleTouchStart('right')}
+              onMouseUp={() => handleTouchEnd('right')}
+              onMouseLeave={() => handleTouchEnd('right')}
+              className={`touch-button no-select w-16 h-16 md:w-20 md:h-20 rounded-full border-4 ${
+                touchControls.right 
+                  ? 'bg-green-500 border-green-300' 
+                  : 'bg-gray-800 border-green-400'
+              } flex items-center justify-center text-white font-bold text-xl md:text-2xl`}
+            >
+              →
+            </button>
+          </div>
+          
+          {/* Shoot Button */}
+          <button
+            onTouchStart={() => handleTouchStart('shoot')}
+            onTouchEnd={() => handleTouchEnd('shoot')}
+            onMouseDown={() => handleTouchStart('shoot')}
+            onMouseUp={() => handleTouchEnd('shoot')}
+            onMouseLeave={() => handleTouchEnd('shoot')}
+            className={`touch-button no-select w-20 h-20 md:w-24 md:h-24 rounded-full border-4 ${
+              touchControls.shoot 
+                ? 'bg-red-500 border-red-300' 
+                : 'bg-gray-800 border-red-400'
+            } flex items-center justify-center text-white font-bold text-lg md:text-xl`}
+          >
+            🔥
+          </button>
+          
+          <p className="text-yellow-400 text-center font-mono text-xs">
+            Touch controls: Use ← → to move, 🔥 to shoot
+          </p>
+        </div>
+      )}
+      
       {/* Music Button at Bottom */}
-      <div className="mt-4">
+      <div className="mt-2 md:mt-4">
         <Button 
           onClick={playBackgroundMusic}
-          className="bg-green-600 hover:bg-green-700 text-white px-6 py-3 font-mono text-lg flex items-center gap-2"
+          className="bg-green-600 hover:bg-green-700 text-white px-4 md:px-6 py-2 md:py-3 font-mono text-sm md:text-lg flex items-center gap-2 w-full md:w-auto"
         >
           🎵 Play "Root of Evil" Music
         </Button>
-        <p className="text-yellow-400 text-center font-mono text-sm mt-2">
+        <p className="text-yellow-400 text-center font-mono text-xs md:text-sm mt-1 md:mt-2">
           Click this button to start the background music
         </p>
       </div>
