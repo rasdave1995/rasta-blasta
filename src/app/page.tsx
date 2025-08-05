@@ -206,9 +206,6 @@ export default function RetroArcadeGame() {
   
   // Touch control handlers
   const handleTouchStart = (control: 'left' | 'right' | 'shoot') => {
-    // Unlock audio on first touch interaction
-    unlockAudio()
-    
     setTouchControls(prev => ({ ...prev, [control]: true }))
     if (control === 'shoot' && gameStateRef.current.isPlaying) {
       playSound('shoot')
@@ -331,9 +328,6 @@ export default function RetroArcadeGame() {
 
   // Initialize game
   const initGame = () => {
-    // Initialize audio context on first game start
-    unlockAudio()
-    
     setGameState({
       isPlaying: true,
       score: 0,
@@ -358,7 +352,7 @@ export default function RetroArcadeGame() {
     setPlayerInitials('')
     generateTaunts()
     
-    // Start background music on user interaction (game start)
+    // Start background music setup (but don't autoplay)
     playBackgroundMusic()
     
     // Start taunt cycling
@@ -385,95 +379,43 @@ export default function RetroArcadeGame() {
     }
   }, [])
 
-  // Background music play function - mobile-friendly version
+  // Background music play function - simplified mobile approach
   const playBackgroundMusic = () => {
-    // First, unlock audio context
-    unlockAudio()
+    console.log('🎵 Setting up background music...')
     
     // Clean up any existing music players
     document.querySelectorAll('.spotify-player, .soundcloud-player').forEach(el => {
       el.remove()
     })
     
-    // Clear any existing fallback intervals
-    if (window.fallbackMusicInterval) {
-      clearInterval(window.fallbackMusicInterval)
-    }
-    
     if (window.currentAudio) {
       window.currentAudio.pause()
       window.currentAudio = null
     }
     
-    console.log('🎵 Starting background music playback...')
-    
-    // Mobile-friendly approach: Create audio element and try to play it
-    const createAndTryPlay = () => {
-      try {
-        const audio = new Audio('/root-of-evil.mp3')
-        audio.loop = true
-        audio.volume = 0.3
-        
-        // Store audio reference for cleanup
-        window.currentAudio = audio
-        
-        // Try to play immediately
-        const playPromise = audio.play()
-        
-        if (playPromise !== undefined) {
-          playPromise.then(() => {
-            console.log('✅ Playing local MP3 file successfully')
-          }).catch(error => {
-            console.log('❌ Autoplay blocked, audio ready for manual start:', error)
-            // Audio is ready but needs user interaction to play
-          })
-        }
-        
-        return audio
-      } catch (error) {
-        console.error('❌ Failed to create audio element:', error)
-        return null
-      }
+    // Try SoundCloud as background option
+    try {
+      const soundcloudIframe = document.createElement('iframe')
+      soundcloudIframe.src = 'https://w.soundcloud.com/player/?url=https%3A//soundcloud.com/rasdave1995/root-of-evil-1&color=%23ff5500&auto_play=true&hide_related=true&show_comments=false&show_user=false&show_reposts=false&show_teaser=false'
+      soundcloudIframe.style.cssText = `
+        position: absolute;
+        top: -9999px;
+        left: -9999px;
+        width: 1px;
+        height: 1px;
+        opacity: 0;
+      `
+      soundcloudIframe.allow = 'autoplay'
+      soundcloudIframe.setAttribute('aria-hidden', 'true')
+      
+      document.body.appendChild(soundcloudIframe)
+      console.log('✅ SoundCloud player set up (hidden)')
+    } catch (error) {
+      console.error('❌ SoundCloud setup failed:', error)
     }
-    
-    // Try SoundCloud first (primary choice - no popup!)
-    const playSoundCloud = () => {
-      try {
-        // Create hidden SoundCloud iframe
-        const soundcloudIframe = document.createElement('iframe')
-        soundcloudIframe.src = 'https://w.soundcloud.com/player/?url=https%3A//soundcloud.com/rasdave1995/root-of-evil-1&color=%23ff5500&auto_play=true&hide_related=true&show_comments=false&show_user=false&show_reposts=false&show_teaser=false'
-        soundcloudIframe.style.cssText = `
-          position: absolute;
-          top: -9999px;
-          left: -9999px;
-          width: 1px;
-          height: 1px;
-          opacity: 0;
-        `
-        soundcloudIframe.allow = 'autoplay'
-        soundcloudIframe.setAttribute('aria-hidden', 'true')
-        
-        document.body.appendChild(soundcloudIframe)
-        console.log('✅ SoundCloud player started (hidden)')
-        
-        return true
-      } catch (error) {
-        console.error('❌ SoundCloud failed:', error)
-        return false
-      }
-    }
-    
-    // Try SoundCloud first
-    const soundCloudSuccess = playSoundCloud()
-    
-    // Always create local audio as primary source
-    const localAudio = createAndTryPlay()
     
     // Store cleanup function
     window.cleanupMusic = () => {
-      if (window.fallbackMusicInterval) {
-        clearInterval(window.fallbackMusicInterval)
-      }
       if (window.currentAudio) {
         window.currentAudio.pause()
         window.currentAudio = null
@@ -484,49 +426,42 @@ export default function RetroArcadeGame() {
     }
   }
   
-  // Manual audio start for mobile devices
-  const startAudioManually = () => {
-    unlockAudio()
+  // Direct audio play - ONLY called from user interaction
+  const playMusicDirect = () => {
+    console.log('🎵 Direct music play initiated by user')
     
-    // Try to play the existing audio element first
-    if (window.currentAudio) {
-      const playPromise = window.currentAudio.play()
-      if (playPromise !== undefined) {
-        playPromise.then(() => {
-          console.log('✅ Audio started manually')
-        }).catch(error => {
-          console.error('❌ Failed to play existing audio, creating new one:', error)
-          // If existing audio fails, create a new one
-          createAndPlayNewAudio()
-        })
-      }
-    } else {
-      // No existing audio, create a new one
-      createAndPlayNewAudio()
-    }
-  }
-  
-  // Create and play new audio element
-  const createAndPlayNewAudio = () => {
     try {
+      // Create fresh audio element on user click
       const audio = new Audio('/root-of-evil.mp3')
       audio.loop = true
       audio.volume = 0.3
       
+      // Store reference
       window.currentAudio = audio
       
+      // Play immediately - this should work because it's directly from user click
       const playPromise = audio.play()
+      
       if (playPromise !== undefined) {
         playPromise.then(() => {
-          console.log('✅ New audio element playing successfully')
+          console.log('✅ SUCCESS: Music playing directly!')
+          // Hide the audio unlock button since music is working
+          setAudioUnlocked(true)
         }).catch(error => {
-          console.error('❌ Still failed to play new audio:', error)
-          alert('Please tap the game area to enable audio, then try the music button again')
+          console.error('❌ Direct play failed:', error)
+          alert('Audio playback failed. Please try again or check your device settings.')
         })
       }
     } catch (error) {
-      console.error('❌ Failed to create new audio element:', error)
+      console.error('❌ Failed to create audio element:', error)
+      alert('Could not load audio file. Please check if the file exists.')
     }
+  }
+  
+  // Manual audio start for mobile devices - simplified
+  const startAudioManually = () => {
+    console.log('🎵 Manual audio start requested')
+    playMusicDirect()
   }
 
   // Set taunts (using the predefined list)
@@ -585,9 +520,6 @@ export default function RetroArcadeGame() {
   // Handle keyboard input
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
-      // Unlock audio on first keyboard interaction
-      unlockAudio()
-      
       const currentGameState = gameStateRef.current
       const currentPlayerInitials = playerInitialsRef.current
       
@@ -1132,10 +1064,8 @@ export default function RetroArcadeGame() {
           }}
           className="border-4 border-green-400 bg-black cursor-pointer"
           onClick={() => {
-            // Unlock audio on canvas click
-            unlockAudio()
             if (!gameState.isPlaying) {
-              startAudioManually()
+              playMusicDirect()
             }
           }}
         />
@@ -1232,19 +1162,19 @@ export default function RetroArcadeGame() {
         {!audioUnlocked && (
           <div className="mb-2 md:mb-4">
             <Button 
-              onClick={startAudioManually}
+              onClick={playMusicDirect}
               className="bg-orange-500 hover:bg-orange-600 text-white px-4 md:px-6 py-2 md:py-3 font-mono text-sm md:text-lg flex items-center gap-2 w-full md:w-auto"
             >
-              🔊 Tap to Enable Sound
+              🔊 Tap to Enable Sound & Music
             </Button>
             <p className="text-orange-400 text-center font-mono text-xs md:text-sm mt-1">
-              Mobile users: Tap here to enable audio
+              Mobile users: Tap here first to enable audio
             </p>
           </div>
         )}
         
         <Button 
-          onClick={startAudioManually}
+          onClick={playMusicDirect}
           className="bg-green-600 hover:bg-green-700 text-white px-4 md:px-6 py-2 md:py-3 font-mono text-sm md:text-lg flex items-center gap-2 w-full md:w-auto"
         >
           🎵 Play "Root of Evil" Music
